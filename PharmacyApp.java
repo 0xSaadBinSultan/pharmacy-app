@@ -23,6 +23,7 @@ import java.text.ParseException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Locale;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -75,6 +76,8 @@ public final class PharmacyApp extends JFrame {
         "All categories", "Heart", "Lung", "Orthopedic"
     });
     private final CatalogPanel catalog = new CatalogPanel();
+    @SuppressWarnings("serial")
+    private final List<Runnable> stockUpdates = new ArrayList<>();
     private final JLabel catalogCount = label("", 13, MUTED);
     private final JLabel cartCount = label("0 items", 13, MUTED);
     private final JLabel subtotal = label("", 14, INK);
@@ -272,6 +275,10 @@ public final class PharmacyApp extends JFrame {
         details.add(name);
         details.add(Box.createVerticalStrut(3));
         details.add(label(medicine.getCategory(), 12, MUTED));
+        details.add(Box.createVerticalStrut(5));
+        JLabel stock = label("", 12, ACCENT);
+        stock.setName("stock-" + medicine.getId());
+        details.add(stock);
         card.add(details, BorderLayout.NORTH);
 
         JPanel controls = new JPanel(new GridBagLayout());
@@ -312,6 +319,16 @@ public final class PharmacyApp extends JFrame {
         JButton add = new JButton("Add to cart");
         add.setName("add-" + medicine.getId());
         add.setPreferredSize(new Dimension(0, 34));
+        Runnable updateStock = () -> {
+            int remaining = medicine.getStock((String) dosage.getSelectedItem());
+            stock.setText("Remaining stock: " + remaining + " units");
+            stock.setForeground(remaining == 0 ? ERROR : ACCENT);
+            add.setEnabled(remaining > 0);
+            add.setText(remaining == 0 ? "Out of stock" : "Add to cart");
+        };
+        dosage.addActionListener(event -> updateStock.run());
+        stockUpdates.add(updateStock);
+        updateStock.run();
         add.addActionListener(event -> {
             try {
                 String enteredQuantity = quantityText.getText().strip();
@@ -325,7 +342,7 @@ public final class PharmacyApp extends JFrame {
                 status.setForeground(ACCENT);
                 status.setText("Added " + medicine.getName() + " (" + strength + ") x " + units + ".");
                 add.setText("Added");
-                Timer feedback = new Timer(900, ignored -> add.setText("Add to cart"));
+                Timer feedback = new Timer(900, ignored -> updateStock.run());
                 feedback.setRepeats(false);
                 feedback.start();
             } catch (ParseException exception) {
@@ -343,6 +360,7 @@ public final class PharmacyApp extends JFrame {
         String query = search.getText().strip().toLowerCase(Locale.ROOT);
         String selected = (String) category.getSelectedItem();
         catalog.removeAll();
+        stockUpdates.clear();
         int matches = 0;
         for (Medicine medicine : medicines) {
             String haystack = (medicine.getName() + " " + medicine.getCategory()).toLowerCase(Locale.ROOT);
@@ -519,10 +537,10 @@ public final class PharmacyApp extends JFrame {
         primaryButton(confirm);
         confirm.addActionListener(event -> {
             try {
-                Receipt receipt = cart.createReceipt(customer.getText(), (String) payment.getSelectedItem());
+                Receipt receipt = cart.checkout(customer.getText(), (String) payment.getSelectedItem());
                 confirm.setEnabled(false);
                 lastReceipt = receipt;
-                cart.clear();
+                stockUpdates.forEach(Runnable::run);
                 lastReceiptButton.setEnabled(true);
                 status.setForeground(ACCENT);
                 status.setText("Payment recorded: " + CartModel.money(receipt.getTotal())
@@ -741,7 +759,7 @@ public final class PharmacyApp extends JFrame {
     private static final class CatalogPanel extends JPanel implements Scrollable {
         private static final long serialVersionUID = 1L;
         private static final int CARD_WIDTH = 244;
-        private static final int CARD_HEIGHT = 302;
+        private static final int CARD_HEIGHT = 326;
         private static final int GAP = 14;
         private int columns = 1;
 

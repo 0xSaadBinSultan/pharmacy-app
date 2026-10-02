@@ -43,6 +43,8 @@ public final class UiSmokeTest {
             });
             waitFor(() -> component(app, "catalogGrid", JPanel.class).getWidth() > 0);
             check(edt(() -> cardCount()) == 9, "Nine sample medicines");
+            check(stock("MED-001", "10 mg").equals("Remaining stock: 100 units"),
+                    "Initial stock is visible");
             check(!edt(() -> button(app, "checkoutButton").isEnabled()), "Empty checkout disabled");
             check(!edt(() -> button(app, "clearCartButton").isEnabled()), "Empty clear disabled");
             check(!edt(() -> button(app, "removeButton").isEnabled()), "Unselected remove disabled");
@@ -101,7 +103,9 @@ public final class UiSmokeTest {
                 waitFor(() -> !error.isShowing());
             }
             edt(() -> {
-                component(app, "quantity-MED-001", JSpinner.class).setValue(1);
+                JSpinner spinner = component(app, "quantity-MED-001", JSpinner.class);
+                ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setText("1");
+                spinner.commitEdit();
                 return null;
             });
 
@@ -111,12 +115,16 @@ public final class UiSmokeTest {
             clickAsync(checkout, "cancelCheckout");
             waitFor(() -> !checkout.isDisplayable());
             check(rows() == 2, "Checkout cancellation preserves cart");
+            check(stock("MED-001", "10 mg").equals("Remaining stock: 100 units"),
+                    "Cancelled checkout leaves stock unchanged");
 
             JDialog cashCheckout = checkout();
             clickAsync(cashCheckout, "confirmPayment");
             waitFor(() -> !component(cashCheckout, "checkoutValidation", JLabel.class)
                     .getText().isBlank());
             check(rows() == 2 && edt(cashCheckout::isShowing), "Blank customer rejected without loss");
+            check(stock("MED-001", "10 mg").equals("Remaining stock: 100 units"),
+                    "Invalid checkout leaves stock unchanged");
             edt(() -> {
                 component(cashCheckout, "customerName", JTextField.class).setText("Sam Rivera");
                 component(cashCheckout, "paymentMethod", JComboBox.class).setSelectedItem("Cash");
@@ -130,10 +138,54 @@ public final class UiSmokeTest {
                     && receipt.contains("Atorvastatin") && receipt.contains("Salbutamol")
                     && receipt.contains("$24.26"), "Cash receipt snapshot complete");
             check(rows() == 0, "Payment clears cart");
+            check(stock("MED-001", "10 mg").equals("Remaining stock: 95 units"),
+                    "Checkout deducts the merged purchased quantity");
+            check(stock("MED-001", "20 mg").equals("Remaining stock: 100 units"),
+                    "Removed dosage stays in stock");
+            check(stock("MED-004", "4 mg").equals("Remaining stock: 98 units"),
+                    "Checkout deducts every purchased medicine");
             check(!edt(() -> button(app, "checkoutButton").isEnabled()), "Paid cart checkout disabled");
             capture(cashReceipt, "receipt.png");
             clickAsync(cashReceipt, "receiptDone");
             waitFor(() -> !cashReceipt.isDisplayable());
+            stock("MED-001", "10 mg");
+            capture(app, "stock-after-checkout.png");
+            validateLayout();
+            edt(() -> {
+                JSpinner spinner = component(app, "quantity-MED-001", JSpinner.class);
+                ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setText("96");
+                return null;
+            });
+            clickAsync(app, "add-MED-001");
+            JDialog stockError = waitForDialogTitle("Order could not be updated");
+            check(rows() == 0 && stock("MED-001", "10 mg").equals("Remaining stock: 95 units"),
+                    "Overselling is rejected without changing stock or cart");
+            edt(() -> { stockError.dispose(); return null; });
+            waitFor(() -> !stockError.isShowing());
+
+            add("MED-001", "10 mg", "95");
+            JDialog finalStockCheckout = checkout();
+            edt(() -> {
+                component(finalStockCheckout, "customerName", JTextField.class).setText("Stock buyer");
+                return null;
+            });
+            clickAsync(finalStockCheckout, "confirmPayment");
+            JDialog finalStockReceipt = waitForDialog("receiptDialog");
+            check(stock("MED-001", "10 mg").equals("Remaining stock: 0 units"),
+                    "Exact-stock purchase displays zero remaining");
+            check(!edt(() -> button(app, "add-MED-001").isEnabled())
+                    && edt(() -> button(app, "add-MED-001").getText()).equals("Out of stock"),
+                    "Sold-out dosage has a disabled add button");
+            clickAsync(finalStockReceipt, "receiptDone");
+            waitFor(() -> !finalStockReceipt.isDisplayable());
+            capture(app, "stock-depleted.png");
+            check(stock("MED-001", "5 mg").equals("Remaining stock: 100 units")
+                    && edt(() -> button(app, "add-MED-001").isEnabled()),
+                    "Switching dosage shows independent stock and re-enables adding");
+            filter("atorvastatin", "All categories");
+            check(stock("MED-001", "10 mg").equals("Remaining stock: 0 units"),
+                    "Filtering preserves sold inventory");
+            filter("", "All categories");
 
             add("MED-007", "200 mg", "2");
             JDialog cardCheckout = checkout();
@@ -148,6 +200,8 @@ public final class UiSmokeTest {
             check(cardText.contains("Payment:  Card") && cardText.contains("Alex Chen")
                     && cardText.contains("$13.13"), "Card checkout receipt correct");
             check(rows() == 0, "Second checkout resets cart");
+            check(stock("MED-007", "200 mg").equals("Remaining stock: 98 units"),
+                    "Card payment also deducts stock");
             clickAsync(cardReceipt, "receiptDone");
             waitFor(() -> !cardReceipt.isDisplayable());
 
@@ -162,6 +216,8 @@ public final class UiSmokeTest {
             clickTextAsync(clearAgain, "Yes");
             waitFor(() -> !clearAgain.isShowing());
             check(rows() == 0, "Confirmed clear empties cart");
+            check(stock("MED-002", "5 mg").equals("Remaining stock: 100 units"),
+                    "Clearing an order leaves stock unchanged");
             System.out.println("UiSmokeTest passed: " + assertions + " assertions; screenshots in artifacts/");
         } finally {
             edt(() -> {
@@ -194,6 +250,13 @@ public final class UiSmokeTest {
     private static JDialog checkout() throws Exception {
         clickAsync(app, "checkoutButton");
         return waitForDialog("checkoutDialog");
+    }
+
+    private static String stock(String id, String dosage) throws Exception {
+        return edt(() -> {
+            component(app, "dosage-" + id, JComboBox.class).setSelectedItem(dosage);
+            return component(app, "stock-" + id, JLabel.class).getText();
+        });
     }
 
     private static int rows() throws Exception {

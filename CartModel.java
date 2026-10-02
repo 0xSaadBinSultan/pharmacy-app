@@ -77,11 +77,13 @@ public final class CartModel extends AbstractTableModel {
                     throw new IllegalArgumentException("Maximum 100 units per medicine and dosage. "
                             + "This line already contains " + line.quantity + ".");
                 }
+                requireStock(line.medicine, dosage, line.quantity + quantity);
                 line.quantity += quantity;
                 fireTableRowsUpdated(i, i);
                 return;
             }
         }
+        requireStock(medicine, dosage, quantity);
         lines.add(new Line(medicine, dosage, quantity));
         int last = lines.size() - 1;
         fireTableRowsInserted(last, last);
@@ -128,7 +130,29 @@ public final class CartModel extends AbstractTableModel {
         return NumberFormat.getCurrencyInstance(Locale.US).format(value);
     }
 
-    /** Take a receipt snapshot first; the caller clears only after successful confirmation. */
+    private static void requireStock(Medicine medicine, String dosage, int quantity) {
+        int remaining = medicine.getStock(dosage);
+        if (quantity > remaining) {
+            throw new IllegalArgumentException("Insufficient stock for " + medicine.getName()
+                    + " (" + dosage + "). Remaining: " + remaining
+                    + "; requested in cart: " + quantity + ".");
+        }
+    }
+
+    /** Confirm one sale: validate everything before deducting stock, then clear the cart. */
+    public Receipt checkout(String customer, String payment) {
+        Receipt receipt = createReceipt(customer, payment);
+        for (Line line : lines) {
+            requireStock(line.medicine, line.dosage, line.quantity);
+        }
+        for (Line line : lines) {
+            line.medicine.reduceStock(line.dosage, line.quantity);
+        }
+        clear();
+        return receipt;
+    }
+
+    /** Create a preview snapshot without changing stock or cart contents. */
     public Receipt createReceipt(String customer, String payment) {
         if (isEmpty()) {
             throw new IllegalArgumentException("Add at least one medicine before checkout.");

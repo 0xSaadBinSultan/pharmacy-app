@@ -13,6 +13,7 @@ public final class ModelTest {
         testRounding();
         testCartLinesAndEvents();
         testCheckout();
+        testStock();
         System.out.println("PASS: " + checks + " model checks");
     }
 
@@ -119,6 +120,73 @@ public final class ModelTest {
         check(snapshot.equals(receipt.getText()), "Receipt remains unchanged after cart reset and reuse");
         equalMoney("7.35", receipt.getTotal(), "Receipt total independent of live cart");
         check(!receipt.getText().contains("Amlodipine"), "Receipt has no later cart entries");
+    }
+
+    private static void testStock() {
+        Medicine medicine = new Medicine("STOCK", "Stock Test", "Orthopedic",
+                Arrays.asList("5 mg", "10 mg"), 2, "", 5);
+        Medicine other = new Medicine("OTHER", "Other Test", "Orthopedic",
+                Arrays.asList("5 mg"), 1, "", 3);
+        check(medicine.getStock("5 mg") == 5 && medicine.getStock("10 mg") == 5,
+                "Each dosage starts with its own stock");
+        expect(IllegalArgumentException.class, () -> medicine.getStock("unknown"));
+        expect(IllegalArgumentException.class, () -> medicine.reduceStock("5 mg", 0));
+        expect(IllegalArgumentException.class, () -> medicine.reduceStock("5 mg", -1));
+        expect(IllegalArgumentException.class, () -> medicine.reduceStock("5 mg", 6));
+        expect(IllegalArgumentException.class, () -> new Medicine("BAD", "Bad", "Orthopedic",
+                Arrays.asList("5 mg"), 1, "", -1));
+        check(medicine.getStock("5 mg") == 5, "Rejected deductions preserve stock");
+
+        CartModel cart = new CartModel();
+        List<TableModelEvent> events = new ArrayList<>();
+        cart.addTableModelListener(events::add);
+        expect(IllegalArgumentException.class, () -> cart.add(other, "5 mg", 4));
+        check(cart.isEmpty() && events.isEmpty(), "Rejected new line has no cart mutation or event");
+        cart.add(medicine, "5 mg", 3);
+        int eventCount = events.size();
+        expect(IllegalArgumentException.class, () -> cart.add(medicine, "5 mg", 3));
+        check(cart.itemCount() == 3 && events.size() == eventCount,
+                "Merged additions cannot exceed stock or mutate a rejected line");
+        cart.createReceipt("Preview", "Cash");
+        check(medicine.getStock("5 mg") == 5, "Adding and previewing do not deduct stock");
+        cart.remove(0);
+        cart.add(medicine, "5 mg", 5);
+        cart.clear();
+        check(medicine.getStock("5 mg") == 5, "Removing and clearing leave stock unchanged");
+
+        cart.add(medicine, "5 mg", 5);
+        cart.add(medicine, "10 mg", 2);
+        cart.add(other, "5 mg", 2);
+        expect(IllegalArgumentException.class, () -> cart.checkout(" ", "Cash"));
+        expect(IllegalArgumentException.class, () -> cart.checkout("Buyer", "Transfer"));
+        check(cart.itemCount() == 9 && medicine.getStock("5 mg") == 5
+                && medicine.getStock("10 mg") == 5 && other.getStock("5 mg") == 3,
+                "Invalid checkout preserves the whole cart and all stock");
+        Receipt receipt = cart.checkout("Buyer", "Cash");
+        check(cart.isEmpty() && medicine.getStock("5 mg") == 0
+                && medicine.getStock("10 mg") == 3 && other.getStock("5 mg") == 1,
+                "Checkout deducts every purchased dosage and clears the cart");
+        equalMoney("16.80", receipt.getTotal(), "Stock-aware checkout receipt total");
+        expect(IllegalArgumentException.class, () -> cart.checkout("Buyer", "Cash"));
+        expect(IllegalArgumentException.class, () -> cart.add(medicine, "5 mg", 1));
+        check(medicine.getStock("10 mg") == 3 && other.getStock("5 mg") == 1,
+                "Repeated confirmation and sold-out additions cannot deduct more stock");
+        cart.add(medicine, "10 mg", 1);
+        cart.checkout("Next buyer", "Card");
+        check(medicine.getStock("10 mg") == 2, "Later sale uses remaining stock");
+
+        cart.add(medicine, "10 mg", 2);
+        cart.add(other, "5 mg", 1);
+        CartModel competingCart = new CartModel();
+        competingCart.add(other, "5 mg", 1);
+        competingCart.checkout("Other buyer", "Cash");
+        eventCount = events.size();
+        expect(IllegalArgumentException.class, () -> cart.checkout("Buyer", "Cash"));
+        check(medicine.getStock("10 mg") == 2 && other.getStock("5 mg") == 0
+                && cart.itemCount() == 3 && events.size() == eventCount,
+                "Checkout revalidates all lines before deducting any stock");
+        check(Medicine.sampleMedicines().get(0).getStock("5 mg") == 100,
+                "A new catalog starts with fresh demonstration stock");
     }
 
     private static void equalMoney(String expected, BigDecimal actual, String message) {

@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-/** Immutable catalog entry. Prices are normalized to cents when created. */
+/** Catalog entry with in-memory stock per dosage; Swing callers use the event dispatch thread. */
 public final class Medicine {
     private final String id;
     private final String name;
@@ -14,9 +16,19 @@ public final class Medicine {
     private final double unitPrice;
     private final BigDecimal price;
     private final String imagePath;
+    private final Map<String, Integer> stock = new LinkedHashMap<>();
 
     public Medicine(String id, String name, String category, List<String> dosageList,
                     double unitPrice, String imagePath) {
+        this(id, name, category, dosageList, unitPrice, imagePath, 100);
+    }
+
+    /** initialStock is the starting number of units for each dosage. */
+    public Medicine(String id, String name, String category, List<String> dosageList,
+                    double unitPrice, String imagePath, int initialStock) {
+        if (initialStock < 0) {
+            throw new IllegalArgumentException("Initial stock cannot be negative.");
+        }
         this.id = requireText(id, "Medicine ID");
         this.name = requireText(name, "Medicine name");
         this.category = requireText(category, "Category");
@@ -30,6 +42,7 @@ public final class Medicine {
                 throw new IllegalArgumentException("Dosages must be unique.");
             }
             strengths.add(value);
+            stock.put(value, initialStock);
         }
         this.dosageList = Collections.unmodifiableList(strengths);
         if (!Double.isFinite(unitPrice) || unitPrice < 0) {
@@ -59,6 +72,23 @@ public final class Medicine {
     public double getUnitPrice() { return unitPrice; }
     public BigDecimal getPrice() { return price; }
     public String getImagePath() { return imagePath; }
+
+    public int getStock(String dosage) {
+        Integer remaining = stock.get(dosage);
+        if (remaining == null) {
+            throw new IllegalArgumentException("Select a valid dosage for this medicine.");
+        }
+        return remaining;
+    }
+
+    public void reduceStock(String dosage, int quantity) {
+        int remaining = getStock(dosage);
+        if (quantity < 1 || quantity > remaining) {
+            throw new IllegalArgumentException("Insufficient stock for " + name + " (" + dosage
+                    + "). Remaining: " + remaining + ".");
+        }
+        stock.put(dosage, remaining - quantity);
+    }
 
     public static List<Medicine> sampleMedicines() {
         return Collections.unmodifiableList(Arrays.asList(
