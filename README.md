@@ -1,5 +1,7 @@
 # Pharmacy Management System
 
+[Download desktop releases](https://github.com/0xSaadBinSultan/pharmacy-app/releases/latest)
+
 [![Build checks](https://github.com/0xSaadBinSultan/pharmacy-app/actions/workflows/desktop.yml/badge.svg)](https://github.com/0xSaadBinSultan/pharmacy-app/actions/workflows/desktop.yml)
 
 A complete Java Swing desktop demo with a searchable medicine catalog, dosage-specific cart, 5% tax, and customer checkout. Uses only Java Swing, AWT, and the standard library. Requires JDK 11 or newer and a graphical desktop.
@@ -107,3 +109,8 @@ Generated `.class`, JAR and build directories are excluded from source control;
 CI artifacts carry downloadable builds. See [CONTRIBUTING.md](CONTRIBUTING.md).
 Original source is [MIT licensed](LICENSE). This is an educational demo with
 synthetic inventory and simulated payments, not a production pharmacy system.
+
+Maintainers can publish a verified build through **Actions → Publish tested desktop
+release → Run workflow**. Supply a new semantic version and the successful desktop
+build run ID. The release helper verifies the source branch and workflow, reuses
+those exact artifacts, and publishes SHA-256 checksums without replacing old releases.
