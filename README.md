@@ -1,21 +1,53 @@
 # Pharmacy Management System
 
+[![Build checks](https://github.com/0xSaadBinSultan/pharmacy-app/actions/workflows/desktop.yml/badge.svg)](https://github.com/0xSaadBinSultan/pharmacy-app/actions/workflows/desktop.yml)
+
 A complete Java Swing desktop demo with a searchable medicine catalog, dosage-specific cart, 5% tax, and customer checkout. Uses only Java Swing, AWT, and the standard library. Requires JDK 11 or newer and a graphical desktop.
 
-## Run
+![Pharmacy desktop demo](docs/preview.png)
 
-From this directory:
+## Platforms and quick start
+
+Runs on **Windows, macOS and Linux** with a graphical desktop. The same Java
+source and JAR work across those systems; there is no database or paid dependency.
+Android and iOS do not run Java Swing applications.
+
+Install JDK 11+ and Python 3.10+ for the portable build helper, then:
 
 ```sh
-javac --release 11 -d out *.java
-java -cp out PharmacyApp
+git clone https://github.com/0xSaadBinSultan/pharmacy-app.git
+cd pharmacy-app
+python build.py --test --run
 ```
 
-Or use the included runnable JAR:
+Use `python3` on macOS/Linux if needed, or `py` on Windows. The helper compiles
+UTF-8 source, runs the model checks and opens the app. It always creates
+`dist/PharmacyManagement.jar`. To start that file directly with Java installed:
 
 ```sh
-java -jar PharmacyManagement.jar
+java -jar dist/PharmacyManagement.jar
 ```
+
+Without Python, use `javac --release 11 -encoding UTF-8 -d out *.java` then
+`java -cp out PharmacyApp`. On PowerShell, replace `*.java` with
+`(Get-ChildItem *.java).FullName`, or use the Python helper to avoid shell differences.
+
+## Standalone app bundles
+
+With **JDK 17+** and its `jpackage` tool on PATH:
+
+```sh
+python build.py --test --package
+```
+
+The app image under `build/native` includes its own Java runtime. Build separately
+on each target OS: Windows produces a folder containing `PharmacyDemo.exe`, macOS
+a `.app`, and Linux an application directory containing `bin/PharmacyDemo`.
+These are portable app images, not system installers. GitHub Actions builds and
+archives one for Windows x64, Linux x64 and macOS Apple Silicon, plus the universal
+JAR. Check each run's results before downloading its artifacts. Native bundles are
+unsigned and the macOS build is not notarized. Other CPUs can use the JAR with a
+matching Java runtime or build their own app image.
 
 ## Features
 
@@ -65,8 +97,13 @@ xvfb-run -a -s '-screen 0 1600x1000x24' java -cp out UiSmokeTest
 
 On a normal graphical desktop, `java -cp out UiSmokeTest` also works. Screenshots are written to `artifacts/`.
 
-## Rebuild the JAR
+## Rebuild and contribute
 
 ```sh
-jar --create --file PharmacyManagement.jar --main-class PharmacyApp -C out .
+python build.py --test
 ```
+
+Generated `.class`, JAR and build directories are excluded from source control;
+CI artifacts carry downloadable builds. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Original source is [MIT licensed](LICENSE). This is an educational demo with
+synthetic inventory and simulated payments, not a production pharmacy system.
