@@ -8,6 +8,22 @@ A complete Java Swing desktop demo with a searchable medicine catalog, dosage-sp
 
 ![Pharmacy desktop demo](docs/preview.png)
 
+## Run a downloaded release
+
+Download the archive for your computer from **Releases**, then extract it:
+
+| Download | Open after extraction |
+| --- | --- |
+| `PharmacyDemo-Windows-AMD64.tar.gz` | `PharmacyDemo/PharmacyDemo.exe` |
+| `PharmacyDemo-Darwin-arm64.tar.gz` | `PharmacyDemo.app` on an Apple Silicon Mac |
+| `PharmacyDemo-Linux-x86_64.tar.gz` | `PharmacyDemo/bin/PharmacyDemo` |
+
+These bundles include Java; keep the complete extracted folder together.
+The separate `PharmacyManagement.jar` works with Java 11+ on other supported CPUs,
+including Intel Macs. It requires `java -jar PharmacyManagement.jar` to start.
+Release checksums are in `SHA256SUMS`. The native builds are unsigned; no paid
+installer, account, API key or subscription is required.
+
 ## Platforms and quick start
 
 Runs on **Windows, macOS and Linux** with a graphical desktop. The same Java
